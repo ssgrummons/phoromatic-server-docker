@@ -1,6 +1,6 @@
-FROM registry.cirrus.ibm.com/public/ubi8:latest
+FROM fedora:latest
 
-LABEL maintainer="ssgrummo@us.ibm.com"
+LABEL maintainer="samuel.grummons@gmail.com"
 
 ARG PHORONIX_VERSION=10.8.2
 
