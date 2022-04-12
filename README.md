@@ -7,16 +7,21 @@ The [Phoronix Test Suite](https://github.com/phoronix-test-suite/phoronix-test-s
 In order to get this to run on OpenShift, I needed to make two changes.
 
 ### Random User ID
-OpenShift does not by default run as the root user; rather it assigns a [random UID as the container's user ID](https://cookbook.openshift.org/users-and-role-based-access-control/why-do-my-applications-run-as-a-random-user-id.html).  By default, that user ID is placed in the root group.  In order to get this to work, I needed to ensure that all the phoronix components were a member of the root group.  I also created a user and user group in the case this was run without specifying a user in Docker Desktop.  
+OpenShift does not by default run as the root user; rather it assigns a [random UID as the container's user ID](https://cookbook.openshift.org/users-and-role-based-access-control/why-do-my-applications-run-as-a-random-user-id.html).  So I needed to ensure that the directories I used were accessible by a random user.
+```
+RUN chmod -R ugo+rwx ${PHORONIX_USERDIR} &&\
+    chmod -R ugo+rwx ${INSTALL_DIR}
+```  
 
-### Phoromatic Kept Exiting
-For some odd reason, I experienced the same issue as [this guy](https://stackoverflow.com/questions/55652074/docker-container-registers-enter-key-on-terminal-continuously).  Essentially, after the container started and the command to start the Phoromatic server was ran, the processes were killed and exited like someone pressed `Enter` at the the `Press [ENTER] to stop the server` prompt.
-
-Right now, I will admit that this is not optimized for Docker yet, as it is called as a separate process on a server and Docker containers are intended to run only one process.  However, to get this to work without do a major rewrite of the code, I needed to trick the container into not stopping by running `tail -f /dev/null` after starting the Phoromatic process (a hack, I know).
+### Fixing an Application bug
+By setting `PTS_IS_DAEMONIZED_SERVER_PROCESS=1` the server was supposed to be able to run independently and not prompt the user to kill the server.  However, due to an [issue in the code](https://github.com/phoronix-test-suite/phoronix-test-suite/issues/615), I needed to manually update the line to properly read the environment variables I set in the Dockerfile.
+```
+RUN sed -i "s/PTS_IS_DAEMONIZED_SERVER_PROCESS/getenv('PTS_IS_DAEMONIZED_SERVER_PROCESS')/g" ${INSTALL_DIR}/pts-core/commands/start_phoromatic_server.php
+```
 
 ## Running Locally
 
-Navigate to this directory 
+I have run this in both Docker Desktop and Podman.  With the Docker Desktop [licensing changes](https://www.docker.com/blog/updating-product-subscriptions/), I installed [Podman on WSL2](https://www.redhat.com/sysadmin/podman-windows-wsl2) and ran it that way.  Included are both instructions. 
 
 ```
 # Navigate to this directory and build the image
@@ -27,8 +32,23 @@ docker volume create phoronix-test-suite
 
 # Run locally using the -u argument to specify a random user
 # Here I randomly assigned user 90210
-docker run -i -t --name phoromatic -d -p 8089:8089 -p 8088:8088 -v phoromatic:/home/phoronix/.phoronix-test-suite/phoromatic phoromatic:latest
+docker run --name phoromatic -d -p 8089:8089 -p 8088:8088 -u 920202 -v phoronix-test-suite:/.phoronix-test-suite phoromatic:latest
+```
+
+For Podman I ran the following in Rootless Podman:
+```
+# Navigate to this directory and build the image
+podman build -t phoromatic .
+
+# Create a volume
+podman volume crate phoromatic
+
+# Run locally and assign a random user
+podman run -i -t --name phoromatic -u=12345 -d -p 8089:8089 -p 8088:8088 -v phoromatic:/.phoronix-test-suite/phoromatic phoromatic:latest
+
+#Check the logs
+podman logs phoromatic
 ```
 
 ## Summary
-This is definitely a work in progress.  I am welcome to any feedback or ideas.  Thanks!
+This is definitely a work in progress.  I know there is more to do to improve logging and fix some other bugs I see.  I am welcome to any feedback or ideas.  Thanks!
