@@ -1,38 +1,37 @@
 # Phoromatic Server - Docker Container
  
-The [Phoronix Test Suite](https://github.com/phoronix-test-suite/phoronix-test-suite) is a comprehensive testing and benchmarking platform available for Linux, Solaris, macOS, Windows, and BSD operating systems.  This Docker container is based off of work [here](https://github.com/mgasiorowski/phoromatic-server-docker); however, it is updated to be able to run on [RedHat Openshift](https://www.redhat.com/en/technologies/cloud-computing/openshift).
+The [Phoronix Test Suite](https://github.com/phoronix-test-suite/phoronix-test-suite) is a comprehensive testing and benchmarking platform available for Linux, Solaris, macOS, Windows, and BSD operating systems.  I have been running it on [RedHat Openshift](https://www.redhat.com/en/technologies/cloud-computing/openshift).
 
 ## Running on RedHat OpenShift
 
-In order to get this to run on OpenShift, I needed to make two changes.
+Getting this application containerized required some significant experimentation and some guidance from the developer.  I started with [this example](https://github.com/mgasiorowski/phoromatic-server-docker); however, I have made some adjustments from there due to some challenges I had with the way Openshift differs from Docker.
 
 ### Random User ID
 OpenShift does not by default run as the root user; rather it assigns a [random UID as the container's user ID](https://cookbook.openshift.org/users-and-role-based-access-control/why-do-my-applications-run-as-a-random-user-id.html).  So I needed to ensure that the directories I used were accessible by a random user.
 ```
-RUN chmod -R ugo+rwx ${PHORONIX_USERDIR} &&\
-    chmod -R ugo+rwx ${INSTALL_DIR}
+RUN chmod -R ugo+rw ${PHORONIX_CACHE} &&\
+    chmod -R ugo+rwx ${INSTALL_DIR} &&\
+    chmod -R ugo+rw /var/lib &&\
+    chmod -R ugo+rw /etc 
 ```  
 
-### Fixing an Application bug
-By setting `PTS_IS_DAEMONIZED_SERVER_PROCESS=1` the server was supposed to be able to run independently and not prompt the user to kill the server.  However, due to an [issue in the code](https://github.com/phoronix-test-suite/phoronix-test-suite/issues/615), I needed to manually update the line to properly read the environment variables I set in the Dockerfile.
-```
-RUN sed -i "s/PTS_IS_DAEMONIZED_SERVER_PROCESS/getenv('PTS_IS_DAEMONIZED_SERVER_PROCESS')/g" ${INSTALL_DIR}/pts-core/commands/start_phoromatic_server.php
-```
+### Ensuring the Application Runs as a Service
+In order for the container to stay running and not trigger a `Press [ENTER] to kill server...` prompt, the directories need to be set up with the [correct permissions](https://github.com/phoronix-test-suite/phoronix-test-suite/issues/615).  If the user has write access to `/var/lib` and `/etc`, then when running the command `./phoronix-test-suite start-phoromatic-server` it will not prompt to kill the server and continue running.  
 
 ## Running Locally
 
-I have run this in both Docker Desktop and Podman.  With the Docker Desktop [licensing changes](https://www.docker.com/blog/updating-product-subscriptions/), I installed [Podman on WSL2](https://www.redhat.com/sysadmin/podman-windows-wsl2) and ran it that way.  Included are both instructions. 
+I have run this in both Docker Desktop and Podman.  With the Docker Desktop's [licensing changes](https://www.docker.com/blog/updating-product-subscriptions/), I installed [Podman on WSL2](https://www.redhat.com/sysadmin/podman-windows-wsl2) and am now doing my local tests using Podman.  Included are both instructions. 
 
 ```
 # Navigate to this directory and build the image
 docker build -t phoromatic .
 
 # Create a volume
-docker volume create phoronix-test-suite
+docker volume create phoromatic
 
 # Run locally using the -u argument to specify a random user
-# Here I randomly assigned user 90210
-docker run --name phoromatic -d -p 8089:8089 -p 8088:8088 -u 920202 -v phoronix-test-suite:/.phoronix-test-suite phoromatic:latest
+# Here I randomly assigned a user
+docker run --name phoromatic -d -p 8089:8089 -p 8088:8088 -u 920202 -v phoromatic:/var/lib/phoronix-test-suite/phoromatic phoromatic:latest
 ```
 
 For Podman I ran the following in Rootless Podman:
@@ -41,14 +40,12 @@ For Podman I ran the following in Rootless Podman:
 podman build -t phoromatic .
 
 # Create a volume
-podman volume crate phoromatic
+podman volume create phoromatic
 
 # Run locally and assign a random user
-podman run -i -t --name phoromatic -u=12345 -d -p 8089:8089 -p 8088:8088 -v phoromatic:/.phoronix-test-suite/phoromatic phoromatic:latest
+podman run -i -t --name phoromatic -u=12345 -d -p 8089:8089 -p 8088:8088 -v phoromatic:/var/lib/phoronix-test-suite/phoromatic phoromatic:latest
 
 #Check the logs
 podman logs phoromatic
 ```
 
-## Summary
-This is definitely a work in progress.  I know there is more to do to improve logging and fix some other bugs I see.  I am welcome to any feedback or ideas.  Thanks!

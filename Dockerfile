@@ -14,28 +14,26 @@ RUN yum update -y &&\
     alternatives --install /usr/bin/php php /usr/bin/php 100
 
 ENV INSTALL_DIR="/var/lib/phoronix-test-suite"
-ENV PHORONIX_USERDIR="/.phoronix-test-suite"
+ENV PHORONIX_CACHE="/var/cache/phoronix-test-suite"
 
 RUN curl -o /tmp/phoronix-test-suite.tar.gz https://phoronix-test-suite.com/releases/phoronix-test-suite-$PHORONIX_VERSION.tar.gz 
 RUN tar xzfv /tmp/phoronix-test-suite.tar.gz --directory /var/lib
-RUN mkdir -p ${PHORONIX_USERDIR}
-ADD resources/phoromatic-user-config.xml ${INSTALL_DIR}/.phoronix-test-suite/user-config.xml
-ADD resources/phoromatic-user-config.xml ${PHORONIX_USERDIR}/user-config.xml
+RUN mkdir -p ${PHORONIX_CACHE}
+ADD resources/phoromatic-user-config.xml /etc/phoronix-test-suite.xml
 ADD resources/phoromatic_tests.txt $INSTALL_DIR
 ADD resources/run.sh $INSTALL_DIR
-RUN sed -i "s/PTS_IS_DAEMONIZED_SERVER_PROCESS/getenv('PTS_IS_DAEMONIZED_SERVER_PROCESS')/g" ${INSTALL_DIR}/pts-core/commands/start_phoromatic_server.php
 
 RUN dos2unix ${INSTALL_DIR}/run.sh
 
-RUN chmod -R ugo+rwx ${PHORONIX_USERDIR} &&\
-    chmod -R ugo+rwx ${INSTALL_DIR}
+RUN chmod -R ugo+rw ${PHORONIX_CACHE} &&\
+    chmod -R ugo+rwx ${INSTALL_DIR} &&\
+    chmod -R ugo+rw /var/lib &&\
+    chmod -R ugo+rw /etc 
 
 WORKDIR $INSTALL_DIR
 
 EXPOSE 8088 8089
 
-VOLUME ["/.phoronix-test-suite/phoromatic"]
+VOLUME ["${INSTALL_DIR}/phoromatic"]
 
-ENV PTS_SILENT_MODE=1
-ENV PTS_IS_DAEMONIZED_SERVER_PROCESS=1
 CMD ["./run.sh"]
