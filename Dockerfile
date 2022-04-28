@@ -2,7 +2,7 @@ FROM fedora:latest
 
 LABEL maintainer="samuel.grummons@gmail.com"
 
-ARG PHORONIX_VERSION=10.8.2
+ARG PHORONIX_VERSION=10.8.3
 
 RUN yum update -y &&\
     yum install -y php php-xml php-gd php-sqlite3 php-posix php-cli php-json php-zip && \
